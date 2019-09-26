@@ -2,6 +2,7 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
+# hello
 # format the data; feature transform and approximate whitening
 def format_data(data):
     P, N = data.shape
