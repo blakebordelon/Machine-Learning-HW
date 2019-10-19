@@ -1,4 +1,4 @@
-import RNN_models as M
+import RNN_models_new as M
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,7 +12,7 @@ def train_model(model, nepochs, optimizer, taueff, batchsize):
     input_dim = 131
     tau = taueff * nepochs
     criterion = nn.NLLLoss()
-    print(model.state_dict())
+    #print(model.state_dict())
     #optimizer = optim.Adam(model.parameters(), lr = lr)
     model.train()
     print_every = 30
@@ -26,7 +26,7 @@ def train_model(model, nepochs, optimizer, taueff, batchsize):
     nll_loss = torch.zeros(num_evals)
     for n in range(nepochs):
 
-        with torch.autograd.set_detect_anomaly(False):
+        with torch.autograd.set_detect_anomaly(True):
             k = np.random.randint(kl_train, km_train)
             #km_train = min(int( (1-1/tau) * km_train + 1/tau * kmax), 128)
             #km_train = min(64, int(km_train + 1/tau*(kmax - km_train) ))
@@ -79,7 +79,7 @@ def error_estimate(model, num_samples, batchsize, kl, km):
 
 
 # get a model based on input parameters
-def get_model(model_type, input_dim=131, hidden_dim = 200, stack_dim=200, num_layers=1, batchsize=25):
+def get_model(model_type, input_dim=131, hidden_dim = 100, stack_dim=50, num_layers=1, batchsize=25):
     if model_type == 'vanilla':
         return M.VanillaRNN(input_dim, hidden_dim, num_layers)
     elif model_type == 'lstm':
@@ -101,15 +101,16 @@ def get_optimizer(model, optimizer_type, lr):
 
 
 
-def train_no_tuning(nepochs = 5000, optimizer_type = 'Adam', taueff = 5, lr=1e-3, batchsize = 25):
+def train_no_tuning(nepochs = 10000, optimizer_type = 'Adam', taueff = 5, lr=1e-3, batchsize = 25):
 
     model_types = ['vanilla', 'lstm', 'lstm_stack']
-    #model_types = ['vanilla']
+    #model_types = ['lstm_stack']
     all_train = []
     all_test = []
     all_nll = []
     all_models = []
     final_errs = []
+    all_errs = []
     for i in range(len(model_types)):
         m = model_types[i]
         model = get_model(m, batchsize = batchsize)
@@ -123,6 +124,12 @@ def train_no_tuning(nepochs = 5000, optimizer_type = 'Adam', taueff = 5, lr=1e-3
         PATH =  m + '_no_tuning.pt'
         torch.save(model.state_dict(), PATH)
 
+        model.eval()
+        e =  error_estimate(model, num_samples = 100, batchsize = batchsize, kl=65, km=128)
+        all_errs.append(e)
+
+    print(all_errs)
+    """
     for i in range(len(model_types)):
         print_every = 30
         xaxis = print_every*np.linspace(0, int(nepochs/print_every), num = int(nepochs/print_every) + 1 )
@@ -145,7 +152,7 @@ def train_no_tuning(nepochs = 5000, optimizer_type = 'Adam', taueff = 5, lr=1e-3
         plt.ylabel('NLLLoss')
         plt.legend()
         plt.savefig('loss_train_vs_test_notuning.pdf')
-
+    """
 
     return
 
@@ -203,8 +210,10 @@ def load_and_test_default(PATH, model_type):
     model = get_model(model_type)
     model.load_state_dict(torch.load(PATH))
     model.eval()
-    return error_estimate(model, num_samples = 500, batchsize = 20, kl=65, km=128)
-
+    if model_type != 'lstm_stack':
+        e = error_estimate(model, num_samples = 500, batchsize = 20, kl=65, km=128)
+    else:
+        e = error_estimate(model, num_samples = int(1000/model.batch_size), batchsize = model.batch_size, kl=65, km=128)
 
 def report_errors(errs, mtypes):
 
@@ -216,7 +225,7 @@ lr_grid = np.linspace(1e-2, 0.1, num = 2)
 #search_learning_rate(model_type = 'vanilla', nepochs = 5000, optimizer_type = 'Adam', taueff = 0.25, lr_grid =lr_grid, batchsize = 20)
 train_no_tuning()
 
-PATH_end = '_notuning.pt'
+PATH_end = '_no_tuning.pt'
 mtypes  = ['vanilla', 'lstm', 'lstm_stack']
 errs = [load_and_test_default(m + PATH_end, m) for m in mtypes]
 report_errors(errs, mtypes)
